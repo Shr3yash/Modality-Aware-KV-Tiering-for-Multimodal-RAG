@@ -1,0 +1,19 @@
+__pycache__/
+.pytest_cache/
+.venv/
+.DS_Store
+
+# Python packaging
+*.egg-info/
+dist/
+build/
+
+# IDE / editor
+.vscode/
+.idea/
+
+# Data and cache artifacts
+data/
+logs/
+*.safetensors
+
