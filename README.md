@@ -111,7 +111,7 @@ Later, `setup.sh` will automate this end-to-end.
 
 - **`model`**: model name, dtype, max sequence length, GPU memory utilization.
 - **`rag`**: RAG-specific settings (chunk size, number of retrieved chunks, embedding model, corpus directory).
-- **`cache`**: number of GPU/CPU blocks, SSD capacity and path, block size, eviction policy, text GPU pin ratio, recompute top-K.
+- **`cache`**: number of GPU/CPU blocks, accelerator device for the GPU tier, SSD capacity and path, block size, eviction policy, text GPU pin ratio, recompute top-K.
 - **`serving`**: host, port, and concurrency settings.
 - **`eval`**: number of samples, batch sizes, warmup queries.
 
@@ -120,6 +120,7 @@ The default values follow the specification, e.g.:
 - Model: `llava-hf/llava-v1.6-mistral-7b-hf`
 - Cache:
   - `gpu_blocks: 2048`
+  - `gpu_device: "cuda"`
   - `cpu_blocks: 8192`
   - `ssd_capacity_gb: 50`
   - `eviction_policy: "modality_aware_lru"`
@@ -371,7 +372,7 @@ There is a test (`tests/test_eviction.py`) that ensures:
 
 It takes a `cache_config` object (the `CacheConfig` from Pydantic or a similar namespace) with fields like:
 
-- `gpu_blocks`, `cpu_blocks`, `ssd_capacity_gb`, `ssd_path`
+- `gpu_blocks`, `gpu_device`, `cpu_blocks`, `ssd_capacity_gb`, `ssd_path`
 - `eviction_policy` – `"modality_aware_lru"` or `"lru"`
 - `text_gpu_pin_ratio`
 
@@ -483,4 +484,3 @@ As these phases are implemented, this README can be extended with:
 - Benchmark commands and sample result tables.
 
 For now, you can treat this document as a **guided tour of the cache foundation** that the rest of the system will rely on.
-
