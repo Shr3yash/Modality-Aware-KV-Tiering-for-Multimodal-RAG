@@ -15,9 +15,9 @@ class GPUCache:
     number of blocks.
     """
 
-    def __init__(self, max_blocks: int, device: str = "cuda"):
+    def __init__(self, max_blocks: int, device: str | None = None):
         self.max_blocks = max_blocks
-        self.device = device
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self._blocks: Dict[str, KVBlock] = {}
 
     @property

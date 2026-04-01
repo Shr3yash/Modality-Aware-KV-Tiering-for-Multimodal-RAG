@@ -1,0 +1,43 @@
+services:
+
+  # -------------------------------------------------------------------------
+  # dev: CPU-only container for running tests and developing Phase 1 code.
+  # Usage: docker compose run --rm dev
+  #        docker compose run --rm dev pytest tests/ -v
+  # -------------------------------------------------------------------------
+  dev:
+    build:
+      context: .
+      target: dev
+    image: kv-tiering:dev
+    volumes:
+      - .:/app          # live-mount source so edits reflect without rebuild
+    environment:
+      - PYTHONPATH=/app/src
+    command: pytest tests/ -v
+
+  # -------------------------------------------------------------------------
+  # gpu: Full CUDA stack for Phase 2+ serving (requires nvidia-container-toolkit)
+  # Usage: docker compose up gpu
+  # -------------------------------------------------------------------------
+  gpu:
+    build:
+      context: .
+      target: gpu
+    image: kv-tiering:gpu
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - PYTHONPATH=/app/src
+      - HF_TOKEN=${HF_TOKEN}          # set in .env for Hugging Face model access
+    volumes:
+      - .:/app
+      - kv-ssd-cache:/tmp/kv_ssd_cache
+    ports:
+      - "8000:8000"
+      - "8001:8001"   # prometheus metrics
+    profiles:
+      - gpu             # only starts with: docker compose --profile gpu up
+
+volumes:
+  kv-ssd-cache:
