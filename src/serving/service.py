@@ -146,7 +146,7 @@ class GenerationService:
     def _get_retriever(self) -> Any:
         if self.retriever is None:
             rag_config = getattr(self.config, "rag", None)
-            chunks = load_corpus(config=rag_config)
+            chunks = load_corpus(config=rag_config, auto_download=True)
             self.retriever = Retriever(corpus_chunks=chunks, config=rag_config)
         return self.retriever
 

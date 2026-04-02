@@ -88,7 +88,7 @@ class OpenCLIPTextEmbedder:
         )
         self._model = model.eval()
         self._image_preprocess = image_preprocess
-        self._tokenizer = open_clip.get_tokenizer(self._open_clip_model_name, cache_dir=self.cache_dir)
+        self._tokenizer = open_clip.get_tokenizer(self._open_clip_model_name)
 
 
 class Retriever:
