@@ -50,6 +50,8 @@ class GenerationService:
 
     def generate(self, request: GenerateRequest) -> GenerateResponse:
         effective_top_k = request.top_k if request.top_k is not None else self.top_k
+        # Start vLLM before retrieval so CLIP/corpus indexing does not occupy VRAM first.
+        self._get_model_runner()
         retrieved_chunks = self._retrieve_chunks(query=request.query, top_k=effective_top_k)
 
         prompt_result = self._call_prompt_builder(

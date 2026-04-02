@@ -22,10 +22,12 @@ class OpenCLIPTextEmbedder:
         *,
         device: str | torch.device | None = None,
         cache_dir: str | Path | None = None,
+        embedding_batch_size: int = 128,
     ) -> None:
         self.model_name = model_name
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
         self.cache_dir = str(cache_dir) if cache_dir is not None else None
+        self.embedding_batch_size = max(1, int(embedding_batch_size))
         self._open_clip_model_name, self._open_clip_pretrained = _resolve_model_spec(model_name)
         self._model: Any | None = None
         self._tokenizer: Any | None = None
@@ -37,6 +39,19 @@ class OpenCLIPTextEmbedder:
             return np.empty((0, 0), dtype="float32")
 
         self._ensure_model()
+        assert self._model is not None
+        assert self._tokenizer is not None
+
+        bs = self.embedding_batch_size
+        if len(texts) <= bs:
+            return self._encode_text_slice(texts)
+
+        parts: list[np.ndarray] = []
+        for i in range(0, len(texts), bs):
+            parts.append(self._encode_text_slice(texts[i : i + bs]))
+        return np.vstack(parts)
+
+    def _encode_text_slice(self, texts: list[str]) -> np.ndarray:
         assert self._model is not None
         assert self._tokenizer is not None
 
@@ -106,9 +121,7 @@ class Retriever:
         self.chunks = list(chunks or corpus_chunks or [])
         self.config = config
         self.top_k = int(getattr(config, "top_k", 5))
-        self.embedder = embedder or embedding_backend or OpenCLIPTextEmbedder(
-            getattr(config, "embedding_model", "openai/clip-vit-large-patch14")
-        )
+        self.embedder = embedder or embedding_backend or self._default_embedder(config)
         self.text_chunks = [chunk for chunk in self.chunks if getattr(chunk, "modality", "text") != "image"]
         self.image_chunks = [chunk for chunk in self.chunks if getattr(chunk, "modality", "text") == "image"]
         self.text_index: faiss.IndexFlatIP | None = None
@@ -118,6 +131,23 @@ class Retriever:
 
         if self.chunks:
             self._build_index()
+
+    @staticmethod
+    def _default_embedder(config: Any | None) -> OpenCLIPTextEmbedder:
+        model_name = "openai/clip-vit-large-patch14"
+        device: str | None = None
+        batch_size = 128
+        if config is not None:
+            model_name = getattr(config, "embedding_model", model_name)
+            device = getattr(config, "embedding_device", None)
+            batch_size = int(getattr(config, "embedding_batch_size", batch_size))
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        return OpenCLIPTextEmbedder(
+            model_name,
+            device=device,
+            embedding_batch_size=batch_size,
+        )
 
     def retrieve(self, query: str, top_k: int | None = None) -> list[CorpusChunk]:
         if not self.chunks:

@@ -29,6 +29,10 @@ class RagConfig(BaseModel):
     top_k: int = 5
     embedding_model: str = "openai/clip-vit-large-patch14"
     corpus_dir: str = "./data/corpus"
+    # CLIP on CPU avoids consuming VRAM before vLLM; use "cuda" only with spare VRAM.
+    embedding_device: str = "cpu"
+    # Corpus index builds call embed_documents once; batching avoids multi‑GB GPU spikes.
+    embedding_batch_size: int = 128
 
 
 class CacheConfig(BaseModel):

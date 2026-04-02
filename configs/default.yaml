@@ -2,7 +2,7 @@ model:
   name: "Qwen/Qwen2.5-Omni-3B"
   dtype: "float16"
   max_model_len: 4096
-  gpu_memory_utilization: 0.75
+  gpu_memory_utilization: 0.25
   enforce_eager: true
 
 rag:
@@ -10,6 +10,8 @@ rag:
   top_k: 5
   embedding_model: "openai/clip-vit-large-patch14"
   corpus_dir: "./data/corpus"
+  embedding_device: "cpu"
+  embedding_batch_size: 128
 
 cache:
   gpu_blocks: 2048
