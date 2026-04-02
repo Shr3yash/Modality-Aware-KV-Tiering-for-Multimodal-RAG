@@ -1,8 +1,9 @@
 model:
-  name: "llava-hf/llava-v1.6-mistral-7b-hf"
+  name: "Qwen/Qwen2.5-Omni-3B"
   dtype: "float16"
   max_model_len: 4096
-  gpu_memory_utilization: 0.85
+  gpu_memory_utilization: 0.75
+  enforce_eager: true
 
 rag:
   chunk_size_tokens: 512
@@ -12,6 +13,7 @@ rag:
 
 cache:
   gpu_blocks: 2048
+  gpu_device: "cuda"
   cpu_blocks: 8192
   ssd_capacity_gb: 50
   ssd_path: "/tmp/kv_ssd_cache"
@@ -29,4 +31,3 @@ eval:
   num_samples: 500
   batch_sizes: [1, 2, 4, 8, 16, 32]
   warmup_queries: 10
-

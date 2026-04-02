@@ -23,7 +23,8 @@ class CacheManager:
     """Orchestrates movement of KV blocks across GPU, CPU, and SSD tiers."""
 
     def __init__(self, cache_config) -> None:
-        self.gpu_cache = GPUCache(cache_config.gpu_blocks)
+        self.gpu_device = getattr(cache_config, "gpu_device", "cuda")
+        self.gpu_cache = GPUCache(cache_config.gpu_blocks, device=self.gpu_device)
         self.cpu_cache = CPUCache(cache_config.cpu_blocks)
         self.ssd_cache = SSDCache(cache_config.ssd_path, cache_config.ssd_capacity_gb)
 
@@ -37,6 +38,10 @@ class CacheManager:
         KV_TIER_USAGE.labels(tier="gpu").set(0)
         KV_TIER_USAGE.labels(tier="cpu").set(0)
         KV_TIER_USAGE.labels(tier="ssd").set(0)
+
+    def _update_eviction_tier(self, block: KVBlock, tier: str) -> None:
+        self.eviction.remove(block.block_id)
+        self.eviction.add(block.block_id, block.modality, tier)
 
     def get_kv_block(self, block_id: str) -> Optional[KVBlock]:
         """Lookup a KV block by id, promoting from lower tiers as needed."""
@@ -94,7 +99,7 @@ class CacheManager:
             self.cpu_cache.add(block)
             KV_TIER_USAGE.labels(tier="cpu").set(self.cpu_cache.size)
 
-        self.eviction.add(block.block_id, block.modality, target_tier)
+        self._update_eviction_tier(block, target_tier)
 
     def _evict_from_tier(self, tier: str, modality: Modality) -> None:
         block_id = self.eviction.evict(tier, modality_hint=modality)
@@ -127,29 +132,28 @@ class CacheManager:
                 self._evict_from_tier("cpu", block.modality)
             self.cpu_cache.add(block)
             KV_TIER_USAGE.labels(tier="cpu").set(self.cpu_cache.size)
+            self._update_eviction_tier(block, "cpu")
         elif tier == "cpu":
             self._cpu_to_ssd(block)
+            if block.tier == "ssd":
+                self._update_eviction_tier(block, "ssd")
 
         KV_EVICTIONS.labels(tier=tier, modality=block.modality.value).inc()
 
     def _gpu_to_cpu(self, block: KVBlock) -> None:
         with KV_PROMOTION_LATENCY.labels("gpu", "cpu").time():
             if block.k_cache is not None:
-                block.k_cache = block.k_cache.to(
-                    "cpu", non_blocking=True, copy=True
-                ).pin_memory()
+                block.k_cache = self.cpu_cache._to_cpu_tensor(block.k_cache)
             if block.v_cache is not None:
-                block.v_cache = block.v_cache.to(
-                    "cpu", non_blocking=True, copy=True
-                ).pin_memory()
+                block.v_cache = self.cpu_cache._to_cpu_tensor(block.v_cache)
             block.tier = "cpu"
 
     def _cpu_to_gpu(self, block: KVBlock) -> None:
         with KV_PROMOTION_LATENCY.labels("cpu", "gpu").time():
             if block.k_cache is not None:
-                block.k_cache = block.k_cache.to("cuda", non_blocking=True)
+                block.k_cache = block.k_cache.to(self.gpu_device, non_blocking=True)
             if block.v_cache is not None:
-                block.v_cache = block.v_cache.to("cuda", non_blocking=True)
+                block.v_cache = block.v_cache.to(self.gpu_device, non_blocking=True)
             block.tier = "gpu"
 
     def _cpu_to_ssd(self, block: KVBlock) -> None:
@@ -180,6 +184,7 @@ class CacheManager:
         self._cpu_to_gpu(block)
         self.gpu_cache.add(block)
         self.cpu_cache.pop(block.block_id)
+        self._update_eviction_tier(block, "gpu")
         KV_TIER_USAGE.labels(tier="gpu").set(self.gpu_cache.size)
         KV_TIER_USAGE.labels(tier="cpu").set(self.cpu_cache.size)
         elapsed = time.perf_counter() - start
@@ -190,6 +195,7 @@ class CacheManager:
             self._evict_from_tier("cpu", block.modality)
         start = time.perf_counter()
         self.cpu_cache.add(block)
+        self._update_eviction_tier(block, "cpu")
         KV_TIER_USAGE.labels(tier="cpu").set(self.cpu_cache.size)
         elapsed = time.perf_counter() - start
         KV_PROMOTION_LATENCY.labels("ssd", "cpu").observe(elapsed)

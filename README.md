@@ -117,13 +117,53 @@ Later, `setup.sh` will automate this end-to-end.
 
 The default values follow the specification, e.g.:
 
-- Model: `llava-hf/llava-v1.6-mistral-7b-hf`
+- Model: `Qwen/Qwen2.5-Omni-3B`
 - Cache:
   - `gpu_blocks: 2048`
   - `cpu_blocks: 8192`
   - `ssd_capacity_gb: 50`
   - `eviction_policy: "modality_aware_lru"`
   - `text_gpu_pin_ratio: 0.7`
+
+### Phase 2 model path
+
+Phase 2 Step 1 freezes the default multimodal model path to:
+
+- `Qwen/Qwen2.5-Omni-3B`
+
+And explicitly does not use yet:
+
+- `llava-hf/llava-v1.6-mistral-7b-hf`
+
+At the current repository stage, this freeze is expressed through
+`configs/default.yaml` and the Phase 2 test spec. The actual serving adapter is
+not implemented yet, so Step 1 is mainly about making the model choice
+unambiguous before building retrieval and serving around it.
+
+Run command and smoke test for the frozen default:
+
+```bash
+.venv/bin/python -c "from src.utils.config import load_config; cfg = load_config('configs/default.yaml'); print(cfg.model.name, cfg.model.dtype, cfg.model.max_model_len)"
+```
+
+Expected output starts with:
+
+```text
+Qwen/Qwen2.5-Omni-3B
+```
+
+This verifies that the repo's typed config resolves to the intended Phase 2
+default. A real runtime model-load smoke test belongs later, once
+`src/serving/model_runner.py` exists.
+
+You can also run the repository smoke test directly:
+
+```bash
+.venv/bin/python -m pytest -q tests/test_phase2_config_spec.py
+```
+
+That test checks that `configs/default.yaml` loads successfully and that the
+frozen Phase 2 model config is still pointed at `Qwen/Qwen2.5-Omni-3B`.
 
 ### How the config is loaded
 
@@ -176,6 +216,34 @@ The cache manager will update these metrics as it moves blocks around, enabling 
 - Hit/miss ratios
 - How often text vs visual blocks are evicted
 - How long promotions take (e.g., SSD → CPU → GPU)
+
+## Phase 2 demo API
+
+Phase 2 now exposes a minimal FastAPI entrypoint in `src/serving/api.py` with:
+
+- `GET /health`
+- `POST /generate`
+- `GET /metrics`
+
+Run the demo server with:
+
+```bash
+.venv/bin/python -m uvicorn src.serving.api:app --host 0.0.0.0 --port 8000
+```
+
+Example request:
+
+```bash
+curl -X POST http://127.0.0.1:8000/generate \
+  -H "Content-Type: application/json" \
+  -d '{"query":"What does the image show?","image_path":"/tmp/example.png","top_k":3}'
+```
+
+Prometheus metrics are available at:
+
+```text
+http://127.0.0.1:8000/metrics
+```
 
 ### Profiling (`src/utils/profiling.py`)
 
@@ -483,4 +551,3 @@ As these phases are implemented, this README can be extended with:
 - Benchmark commands and sample result tables.
 
 For now, you can treat this document as a **guided tour of the cache foundation** that the rest of the system will rely on.
-
