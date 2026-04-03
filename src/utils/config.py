@@ -51,6 +51,8 @@ class ServingConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
     max_concurrent: int = 16
+    # When False, /generate skips corpus + CLIP + retrieval (model-only sanity check).
+    enable_rag: bool = True
 
 
 class EvalConfig(BaseModel):
