@@ -17,3 +17,10 @@ data/
 logs/
 *.safetensors
 
+.claude/
+CLAUDE.md
+.aider*
+.cursorrules
+.copilot/
+*.ai-cache
+

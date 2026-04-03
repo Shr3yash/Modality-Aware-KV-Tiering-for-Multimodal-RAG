@@ -61,4 +61,4 @@ COPY . .
 # SSD cache directory
 RUN mkdir -p /tmp/kv_ssd_cache
 
-CMD ["python", "-m", "uvicorn", "src.serving.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "src.serving.api:app", "--host", "0.0.0.0", "--port", "8000"]
