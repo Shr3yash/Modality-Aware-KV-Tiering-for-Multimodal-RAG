@@ -12,6 +12,9 @@ build/
 .vscode/
 .idea/
 
+# Local override configs (machine-specific, never commit)
+configs/local*.yaml
+
 # Data and cache artifacts
 data/
 logs/
