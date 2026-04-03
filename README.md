@@ -45,61 +45,82 @@ This matches the observation that text tokens are often reused much more across 
 
 ## Project layout (current state)
 
-At the moment, the following pieces have been implemented and are ready to extend:
-
 - **Project metadata**
   - `pyproject.toml` – Python package configuration and pinned dependencies.
-  - `requirements.txt` – A flat list of pinned dependencies for `pip install -r`.
+  - `requirements.txt` – Pinned production dependencies (GPU/vLLM stack).
+  - `requirements-dev.txt` – Dev/Docker dependencies (CPU-only, includes Byaldi).
 
 - **Configuration & utilities**
   - `src/utils/config.py` – Typed config loader using Pydantic.
   - `src/utils/logging.py` – Structured logging with `structlog`.
   - `src/utils/metrics.py` – Prometheus-compatible metrics for cache stats.
-  - `src/utils/profiling.py` – Simple CUDA timing and memory snapshots.
+  - `src/utils/profiling.py` – CUDA timing and memory snapshots.
 
-- **Cache subsystem (Phase 1 foundation)**
-  - `src/cache/kv_block.py` – Core `KVBlock` data structure and modality tagging.
+- **Cache subsystem (Phase 1)**
+  - `src/cache/kv_block.py` – `KVBlock` data structure and modality tagging.
   - `src/cache/chunk_hash.py` – Content-based hashing for chunks.
   - `src/cache/ssd_cache.py` – SSD-backed storage using `safetensors`.
   - `src/cache/gpu_cache.py` – In-GPU KV block storage.
   - `src/cache/cpu_cache.py` – In-CPU KV block storage with pinned memory.
   - `src/cache/eviction.py` – LRU and Modality-Aware LRU eviction policies.
-  - `src/cache/cache_manager.py` – Orchestrator that moves blocks across GPU/CPU/SSD.
+  - `src/cache/cache_manager.py` – Orchestrates block movement across GPU/CPU/SSD.
 
-- **Initial tests**
-  - `tests/test_ssd_cache.py` – Verifies storing/loading KV blocks to/from SSD.
-  - `tests/test_eviction.py` – Verifies basic behavior of the eviction policies.
-  - `tests/test_cache_manager.py` – Smoke test that insertion and lookup work.
+- **RAG pipeline (Phase 2)**
+  - `src/rag/corpus.py` – Loads ViDoRe HF dataset or plain-text files into `CorpusChunk` objects; auto-downloads dataset on first run.
+  - `src/rag/retriever.py` – FAISS + OpenCLIP fallback retriever (text + image indices).
+  - `src/rag/byaldi_retriever.py` – **Primary retriever**: Byaldi + ColQwen2 visual document retrieval; builds and persists a ColPali index on first run.
+  - `src/rag/prompt_builder.py` – Builds multimodal vLLM-compatible prompt from retrieved chunks.
+  - `src/rag/schemas.py` – Pydantic schemas: `GenerateRequest`, `GenerateResponse`, `PromptSegment`, `RetrievedChunk`.
 
-The RAG pipeline, model wrapper, serving API, and evaluation harness will be built **on top of this foundation**.
+- **Serving (Phase 2)**
+  - `src/serving/model_runner.py` – Wraps vLLM `LLM`; handles chat and generate dispatch.
+  - `src/serving/service.py` – `GenerationService`: orchestrates retrieval → prompt → generation.
+  - `src/serving/api.py` – FastAPI app with `/generate`, `/health`, `/metrics`.
+
+- **Docker**
+  - `Dockerfile` – Two-stage: `dev` (CPU-only, runs tests) and `gpu` (CUDA 12.1 + vLLM).
+  - `docker-compose.yml` – `dev` service runs tests; `gpu` service serves the API.
 
 ---
 
-## Dependencies and environment (what is pinned and why)
+## Dependencies and environment
 
-The project pins exact versions in **both** `pyproject.toml` and `requirements.txt` so runs are reproducible.  
+There are two requirements files:
+
+| File | Used by | Notes |
+|------|---------|-------|
+| `requirements.txt` | Production / GPU server | vLLM 0.18.1, torch 2.10.0, CUDA stack |
+| `requirements-dev.txt` | Docker dev container | CPU-only torch 2.2.1, includes Byaldi |
+
 Key dependencies:
 
-- **vLLM `0.6.3`** – High-performance LLM/VLM inference engine.  
-- **PyTorch `2.2.1` + CUDA 12.1** – Core tensor library and GPU support.
-- **Transformers `4.40.0`** – Model and tokenizer utilities.
-- **FastAPI / Uvicorn** – HTTP server for the `/generate` and `/health` endpoints (to be wired later).
+- **vLLM `0.18.1`** – High-performance LLM/VLM inference engine (H100-ready).
+- **PyTorch `2.10.0` + CUDA 12.1** – Core tensor library and GPU support.
+- **Transformers `4.57.6`** – Model and tokenizer utilities.
+- **FastAPI / Uvicorn** – HTTP server for `/generate`, `/health`, `/metrics`.
 - **Pydantic `2.x`** – Typed configuration system.
-- **FAISS + open-clip-torch** – Vector search and CLIP embeddings (for later RAG stages).
+- **FAISS + open-clip-torch** – Fallback vector search and CLIP embeddings.
+- **Byaldi (`requirements-dev.txt` only)** – ColPali/ColQwen2 visual retrieval (primary RAG backend).
 - **structlog** – Structured logging.
 - **prometheus-client** – Metrics export.
-- **safetensors** – Fast, safe tensor serialization for SSD storage.
+- **safetensors** – Fast tensor serialization for SSD storage.
 - **pytest / pytest-asyncio** – Testing.
 
-For now, you can install everything with:
+**Local install (no Docker):**
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Later, `setup.sh` will automate this end-to-end.
+**Docker (recommended for dev):**
+
+```bash
+docker compose build dev
+docker compose run --rm dev            # runs all tests
+docker compose run --rm dev bash       # interactive shell
+```
 
 ---
 
@@ -125,45 +146,17 @@ The default values follow the specification, e.g.:
   - `eviction_policy: "modality_aware_lru"`
   - `text_gpu_pin_ratio: 0.7`
 
-### Phase 2 model path
+### Phase 2 model
 
-Phase 2 Step 1 freezes the default multimodal model path to:
+The default multimodal model is `Qwen/Qwen2.5-Omni-3B`, served via vLLM with
+`allowed_local_media_path="/"` to support local image inputs.
 
-- `Qwen/Qwen2.5-Omni-3B`
-
-And explicitly does not use yet:
-
-- `llava-hf/llava-v1.6-mistral-7b-hf`
-
-At the current repository stage, this freeze is expressed through
-`configs/default.yaml` and the Phase 2 test spec. The actual serving adapter is
-not implemented yet, so Step 1 is mainly about making the model choice
-unambiguous before building retrieval and serving around it.
-
-Run command and smoke test for the frozen default:
+Smoke test:
 
 ```bash
-.venv/bin/python -c "from src.utils.config import load_config; cfg = load_config('configs/default.yaml'); print(cfg.model.name, cfg.model.dtype, cfg.model.max_model_len)"
+python -c "from src.utils.config import load_config; cfg = load_config('configs/default.yaml'); print(cfg.model.name)"
+# Qwen/Qwen2.5-Omni-3B
 ```
-
-Expected output starts with:
-
-```text
-Qwen/Qwen2.5-Omni-3B
-```
-
-This verifies that the repo's typed config resolves to the intended Phase 2
-default. A real runtime model-load smoke test belongs later, once
-`src/serving/model_runner.py` exists.
-
-You can also run the repository smoke test directly:
-
-```bash
-.venv/bin/python -m pytest -q tests/test_phase2_config_spec.py
-```
-
-That test checks that `configs/default.yaml` loads successfully and that the
-frozen Phase 2 model config is still pointed at `Qwen/Qwen2.5-Omni-3B`.
 
 ### How the config is loaded
 
