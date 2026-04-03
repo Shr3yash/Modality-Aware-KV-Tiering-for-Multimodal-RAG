@@ -6,13 +6,16 @@ from .corpus import (
     download_vidore_corpus,
     load_corpus,
 )
+from .byaldi_retriever import ByaldiRetriever, build_byaldi_image_corpus
 from .prompt_builder import assemble_prompt, build_prompt
 from .retriever import OpenCLIPTextEmbedder, Retriever
 from .schemas import GenerateRequest, GenerateResponse, PromptSegment, RetrievedChunk
 
 __all__ = [
     "assemble_prompt",
+    "build_byaldi_image_corpus",
     "build_prompt",
+    "ByaldiRetriever",
     "CorpusChunk",
     "DEFAULT_VIDORE_CONFIG",
     "DEFAULT_VIDORE_DATASET",

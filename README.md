@@ -521,6 +521,35 @@ This test:
 
 ---
 
+## Retrieval Backend: Byaldi + ColPali
+
+The multimodal retrieval backend uses **Byaldi**, a wrapper around the **ColPali / ColQwen2**
+family of visual document retrieval models. Unlike the CLIP + FAISS approach, ColQwen2 processes
+documents as **images** — no OCR or text extraction needed — using late-interaction embeddings
+over image patches. This is the default backend (`rag.retriever_backend: "byaldi"` in
+`configs/default.yaml`); switch to `"faiss"` to revert to the CLIP + FAISS path.
+
+| Component | Details |
+|-----------|---------|
+| **Byaldi** | Multimodal RAG wrapper. [github.com/AnswerDotAI/byaldi](https://github.com/AnswerDotAI/byaldi) — License: Apache 2.0 |
+| **ColPali** | Visual document retrieval model family. [github.com/illuin-tech/colpali](https://github.com/illuin-tech/colpali) — License: Apache 2.0 |
+| **ColQwen2-v1.0** | Default model checkpoint (`vidore/colqwen2-v1.0`). ViDoRe v3 HR score: **89.3**. |
+| **ViDoRe v3 HR** | Evaluation dataset: `vidore/vidore_v3_hr` on Hugging Face. |
+
+On first run the ViDoRe corpus is auto-downloaded and a ColQwen2 index is built and persisted
+to `rag.index_dir` (default: `./data/byaldi_index`). Subsequent runs load the index from disk
+in seconds. Index building is CPU-compatible but slow (~10–30 min); use a GPU if available.
+
+### References
+
+- Faysse et al., *ColPali: Efficient Document Retrieval with Vision Language Models*,
+  arXiv:2407.01449, 2024. https://arxiv.org/abs/2407.01449
+- Byaldi GitHub: https://github.com/AnswerDotAI/byaldi
+- ColPali GitHub: https://github.com/illuin-tech/colpali
+- Model card: https://huggingface.co/vidore/colqwen2-v1.0
+
+---
+
 ## What comes next (roadmap)
 
 Everything implemented so far is **Phase 1: Foundation**. Next phases will add:

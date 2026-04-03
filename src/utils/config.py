@@ -29,6 +29,9 @@ class RagConfig(BaseModel):
     top_k: int = 5
     embedding_model: str = "openai/clip-vit-large-patch14"
     corpus_dir: str = "./data/corpus"
+    retriever_backend: str = "faiss"  # "faiss" | "byaldi"
+    index_dir: str = "./data/byaldi_index"
+    colpali_model: str = "vidore/colqwen2-v1.0"
 
 
 class CacheConfig(BaseModel):
