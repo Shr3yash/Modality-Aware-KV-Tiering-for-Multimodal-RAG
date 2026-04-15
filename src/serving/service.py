@@ -65,6 +65,8 @@ class GenerationService:
             retrieved_chunks=retrieved_chunks,
             system_instruction=self.system_instruction,
             image_path=request.image_path,
+            max_input_tokens=getattr(getattr(self.config, "model", None), "max_model_len", None),
+            reserved_output_tokens=getattr(self._get_model_runner(), "max_tokens", 256),
         )
         segments = _normalize_prompt_segments(prompt_result["segments"])
         prompt_payload = prompt_result["payload"]

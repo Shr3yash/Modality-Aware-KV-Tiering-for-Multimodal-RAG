@@ -93,8 +93,10 @@ class ModelRunner:
         temperature: float | None,
         top_p: float | None,
     ) -> dict[str, Any]:
+        resolved_max_tokens = self.max_tokens if max_tokens is None else max_tokens
+        resolved_max_tokens = max(1, int(resolved_max_tokens))
         params = {
-            "max_tokens": self.max_tokens if max_tokens is None else max_tokens,
+            "max_tokens": resolved_max_tokens,
             "temperature": self.temperature if temperature is None else temperature,
             "top_p": self.top_p if top_p is None else top_p,
         }
