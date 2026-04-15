@@ -1,0 +1,1 @@
+Loading pretrained ViT-L-14 from OpenAI on CUDA reaches 710% cpu utilization.

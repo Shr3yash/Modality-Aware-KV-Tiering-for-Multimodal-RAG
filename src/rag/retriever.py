@@ -173,13 +173,14 @@ class Retriever:
         scored_results = text_results + image_results
         scored_results.sort(key=lambda item: (-item[0], item[1].chunk_id, item[1].modality))
         ranked_results: list[CorpusChunk] = []
-        for rank, (_, chunk) in enumerate(scored_results, start=1):
+        top_scored = scored_results[:effective_top_k]
+        for rank, (_, chunk) in enumerate(top_scored, start=1):
             ranked_results.append(
                 replace(
                     chunk,
                     retrieval_rank=rank,
-                    score=scored_results[rank - 1][0],
-                    metadata={**chunk.metadata, "score": scored_results[rank - 1][0]},
+                    score=top_scored[rank - 1][0],
+                    metadata={**chunk.metadata, "score": top_scored[rank - 1][0]},
                 )
             )
         return ranked_results

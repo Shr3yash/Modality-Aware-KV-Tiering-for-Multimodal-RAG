@@ -71,6 +71,8 @@ class GenerationService:
         segments = _normalize_prompt_segments(prompt_result["segments"])
         prompt_payload = prompt_result["payload"]
         segment_metadata = dict(prompt_result.get("segment_metadata") or {})
+        print("##### FINAL PROMPT PAYLOAD LENGTH: ", len(prompt_payload))
+        print("##### PROMPT PAYLOAD: ", prompt_payload)
 
         runner_response = self._get_model_runner().generate(request_payload=prompt_payload)
         answer_text = _get_value(runner_response, "generated_text", "text", "answer_text", default="")
