@@ -1,9 +1,9 @@
 model:
-  name: "Qwen/Qwen2.5-Omni-3B"
+  name: "Qwen/Qwen3-Omni-30B-A3B-Instruct"
   dtype: "float16"
   max_model_len: 4096
-  gpu_memory_utilization: 0.25
-  enforce_eager: true
+  gpu_memory_utilization: 0.75
+  enforce_eager: true 
 
 rag:
   chunk_size_tokens: 512
