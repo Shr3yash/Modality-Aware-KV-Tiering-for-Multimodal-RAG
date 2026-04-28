@@ -24,15 +24,17 @@ class CPUCache:
     def get(self, block_id: str) -> Optional[KVBlock]:
         return self._blocks.get(block_id)
 
+    def _to_cpu_tensor(self, tensor: torch.Tensor) -> torch.Tensor:
+        tensor = tensor.to("cpu", non_blocking=True, copy=True)
+        if torch.cuda.is_available():
+            tensor = tensor.pin_memory()
+        return tensor
+
     def add(self, block: KVBlock) -> None:
         if block.k_cache is not None:
-            block.k_cache = block.k_cache.to(
-                "cpu", non_blocking=True, copy=True
-            ).pin_memory()
+            block.k_cache = self._to_cpu_tensor(block.k_cache)
         if block.v_cache is not None:
-            block.v_cache = block.v_cache.to(
-                "cpu", non_blocking=True, copy=True
-            ).pin_memory()
+            block.v_cache = self._to_cpu_tensor(block.v_cache)
         block.tier = "cpu"
         self._blocks[block.block_id] = block
 

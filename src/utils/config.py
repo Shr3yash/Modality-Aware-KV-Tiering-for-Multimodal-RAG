@@ -3,6 +3,17 @@ from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
+import torch
+
+def _gpu_device() -> str:
+    if torch.backends.mps.is_available():
+        # print("The current device is mps ...")
+        return "mps"
+    if torch.cuda.is_available():
+        # print("The current device is cuda ...")
+        return "cuda"
+    # print("The current device is cpu ...")
+    return "cpu"
 
 
 class ModelConfig(BaseModel):
@@ -10,6 +21,7 @@ class ModelConfig(BaseModel):
     dtype: str = "float16"
     max_model_len: int = 4096
     gpu_memory_utilization: float = 0.85
+    enforce_eager: bool = True
 
 
 class RagConfig(BaseModel):
@@ -23,6 +35,7 @@ class RagConfig(BaseModel):
 class CacheConfig(BaseModel):
     enabled: bool = True
     gpu_blocks: int = 2048
+    gpu_device: str = Field(default_factory=_gpu_device)
     cpu_blocks: int = 8192
     ssd_capacity_gb: float = 50.0
     ssd_path: str = "/tmp/kv_ssd_cache"
@@ -78,4 +91,3 @@ def load_config(path: str | Path) -> Config:
         eval=EvalConfig(**raw.get("eval", {})),
         pruning=PruningConfig(**raw.get("pruning", {})),
     )
-

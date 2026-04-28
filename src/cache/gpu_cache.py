@@ -11,11 +11,13 @@ class GPUCache:
     """In-memory GPU tier for KV blocks.
 
     This class does not directly manipulate vLLM internals; instead, it manages
-    KVBlock tensors on CUDA devices with a fixed capacity in number of blocks.
+    KVBlock tensors on a configured accelerator device with a fixed capacity in
+    number of blocks.
     """
 
-    def __init__(self, max_blocks: int):
+    def __init__(self, max_blocks: int, device: str = "cuda"):
         self.max_blocks = max_blocks
+        self.device = device
         self._blocks: Dict[str, KVBlock] = {}
 
     @property
@@ -30,9 +32,9 @@ class GPUCache:
 
     def add(self, block: KVBlock) -> None:
         if block.k_cache is not None:
-            block.k_cache = block.k_cache.to("cuda", non_blocking=True)
+            block.k_cache = block.k_cache.to(self.device, non_blocking=True)
         if block.v_cache is not None:
-            block.v_cache = block.v_cache.to("cuda", non_blocking=True)
+            block.v_cache = block.v_cache.to(self.device, non_blocking=True)
         block.tier = "gpu"
         self._blocks[block.block_id] = block
 
