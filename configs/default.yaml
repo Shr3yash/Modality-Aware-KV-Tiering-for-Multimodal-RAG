@@ -9,8 +9,10 @@ rag:
   top_k: 5
   embedding_model: "openai/clip-vit-large-patch14"
   corpus_dir: "./data/corpus"
+  visual_retrieval_boost: 1.0
 
 cache:
+  enabled: true
   gpu_blocks: 2048
   cpu_blocks: 8192
   ssd_capacity_gb: 50
@@ -24,9 +26,16 @@ serving:
   host: "0.0.0.0"
   port: 8000
   max_concurrent: 16
+  dry_run: false
+  offload_encoders_after_init: false
 
 eval:
   num_samples: 500
   batch_sizes: [1, 2, 4, 8, 16, 32]
   warmup_queries: 10
+
+pruning:
+  enabled: false
+  backend: "mobilesam"
+  foreground_threshold: 0.3
 
