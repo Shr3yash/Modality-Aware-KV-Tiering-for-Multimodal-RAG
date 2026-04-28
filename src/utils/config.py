@@ -29,9 +29,11 @@ class RagConfig(BaseModel):
     top_k: int = 5
     embedding_model: str = "openai/clip-vit-large-patch14"
     corpus_dir: str = "./data/corpus"
+    visual_retrieval_boost: float = 1.0
 
 
 class CacheConfig(BaseModel):
+    enabled: bool = True
     gpu_blocks: int = 2048
     gpu_device: str = Field(default_factory=_gpu_device)
     cpu_blocks: int = 8192
@@ -47,6 +49,8 @@ class ServingConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
     max_concurrent: int = 16
+    dry_run: bool = False
+    offload_encoders_after_init: bool = False
 
 
 class EvalConfig(BaseModel):
@@ -55,12 +59,19 @@ class EvalConfig(BaseModel):
     warmup_queries: int = 10
 
 
+class PruningConfig(BaseModel):
+    enabled: bool = False
+    backend: str = "mobilesam"
+    foreground_threshold: float = 0.3
+
+
 class Config(BaseModel):
     model: ModelConfig
     rag: RagConfig
     cache: CacheConfig
     serving: ServingConfig
     eval: EvalConfig
+    pruning: PruningConfig = PruningConfig()
 
 
 def load_config(path: str | Path) -> Config:
@@ -78,4 +89,5 @@ def load_config(path: str | Path) -> Config:
         cache=CacheConfig(**raw.get("cache", {})),
         serving=ServingConfig(**raw.get("serving", {})),
         eval=EvalConfig(**raw.get("eval", {})),
+        pruning=PruningConfig(**raw.get("pruning", {})),
     )
