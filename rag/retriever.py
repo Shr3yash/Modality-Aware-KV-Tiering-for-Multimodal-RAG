@@ -1,4 +1,5 @@
-from typing import Dict, List
+import re
+from typing import Dict, List, Optional
 from pathlib import Path
 
 import numpy as np
@@ -6,6 +7,35 @@ import torch
 from PIL import Image
 from sentence_transformers import SentenceTransformer
 from transformers import CLIPModel, CLIPProcessor
+
+try:
+    from rank_bm25 import BM25Okapi
+except ImportError:  # pragma: no cover - exercised only when dep missing
+    BM25Okapi = None
+
+
+_TOKEN_RE = re.compile(r"\w+", flags=re.UNICODE)
+
+
+def _bm25_tokenize(text: str) -> List[str]:
+    return [t.lower() for t in _TOKEN_RE.findall(text or "")]
+
+
+def _rrf_fuse(rank_lists: List[List[int]], weights: List[float], k: int, top_k: int) -> List[int]:
+    """Reciprocal Rank Fusion over multiple ranked id-lists.
+
+    rank_lists[i] is a list of candidate indices ordered best-first.
+    Returns the top_k fused indices."""
+    scores: Dict[int, float] = {}
+    for ranks, w in zip(rank_lists, weights):
+        if w == 0.0:
+            continue
+        for r, idx in enumerate(ranks):
+            scores[idx] = scores.get(idx, 0.0) + w / (k + r + 1)
+    if not scores:
+        return []
+    fused = sorted(scores.items(), key=lambda kv: -kv[1])
+    return [idx for idx, _ in fused[:top_k]]
 
 
 def _clip_features_to_tensor(raw: object) -> torch.Tensor:
@@ -24,6 +54,9 @@ class QuoteRetriever:
         text_model_name: str,
         image_model_name: str,
         device: str = "cuda",
+        retrieval_mode: str = "dense",
+        bm25_weight: float = 1.0,
+        rrf_k: int = 60,
     ):
         self.text_model = SentenceTransformer(text_model_name)
 
@@ -31,6 +64,17 @@ class QuoteRetriever:
         self.clip_processor = CLIPProcessor.from_pretrained(image_model_name)
         self.clip_model = CLIPModel.from_pretrained(image_model_name).to(self.device)
         self.clip_model.eval()
+
+        if retrieval_mode not in ("dense", "hybrid"):
+            raise ValueError(f"Unknown retrieval_mode: {retrieval_mode!r}")
+        if retrieval_mode == "hybrid" and BM25Okapi is None:
+            raise ImportError(
+                "retrieval_mode='hybrid' requires the 'rank_bm25' package. "
+                "Install via: pip install rank_bm25"
+            )
+        self.retrieval_mode = retrieval_mode
+        self.bm25_weight = bm25_weight
+        self.rrf_k = rrf_k
 
     def _encode_text_quotes(self, texts: List[str]) -> np.ndarray:
         return self.text_model.encode(
@@ -90,6 +134,20 @@ class QuoteRetriever:
         order = np.argsort(-sims)
         return order[:k].tolist()
 
+    def _bm25_rank(self, query: str, corpus: List[str]) -> List[int]:
+        """Return candidate indices ranked by BM25 score, best-first.
+
+        Returns empty list if the dep is missing or corpus is empty so callers
+        can fall back gracefully."""
+        if BM25Okapi is None or not corpus:
+            return []
+        tokenized_corpus = [_bm25_tokenize(t) for t in corpus]
+        if not any(tokenized_corpus):
+            return []
+        bm25 = BM25Okapi(tokenized_corpus)
+        scores = bm25.get_scores(_bm25_tokenize(query))
+        return np.argsort(-scores).tolist()
+
     def _normalize_vector(self, vec: np.ndarray) -> np.ndarray:
         norm = np.linalg.norm(vec)
         if norm == 0.0:
@@ -119,7 +177,21 @@ class QuoteRetriever:
             text_corpus = [q.get("text", "") for q in text_quotes]
             text_embs = self._encode_text_quotes(text_corpus)
             query_text_emb = self._encode_text_quotes([query])[0]
-            text_idx = self._topk(query_text_emb, text_embs, min(text_top_k, len(text_quotes)))
+            k_text = min(text_top_k, len(text_quotes))
+            dense_full = self._topk(query_text_emb, text_embs, len(text_quotes))
+            if self.retrieval_mode == "hybrid":
+                bm25_full = self._bm25_rank(query, text_corpus)
+                if bm25_full:
+                    text_idx = _rrf_fuse(
+                        [dense_full, bm25_full],
+                        [1.0, self.bm25_weight],
+                        self.rrf_k,
+                        k_text,
+                    )
+                else:
+                    text_idx = dense_full[:k_text]
+            else:
+                text_idx = dense_full[:k_text]
             selected_texts = [text_quotes[i] for i in text_idx]
 
         # Text-to-image retrieval with CLIP (image paths)

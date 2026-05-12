@@ -62,6 +62,9 @@ class RAGPipeline:
             text_model_name=cfg.text_embedding_model,
             image_model_name=cfg.image_embedding_model,
             device=cfg.retrieval_device,
+            retrieval_mode=getattr(cfg, "retrieval_mode", "dense"),
+            bm25_weight=getattr(cfg, "bm25_weight", 1.0),
+            rrf_k=getattr(cfg, "rrf_k", 60),
         )
         self.pruner = RetrievalPruner(
             mode=cfg.pruning_mode,

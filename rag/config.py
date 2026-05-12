@@ -15,6 +15,12 @@ class RAGConfig:
     image_embedding_model: str = "openai/clip-vit-base-patch32"
     retrieval_device: str = "cuda"
 
+    # hybrid retrieval (BM25 + dense, fused with Reciprocal Rank Fusion)
+    # mode: "dense" (current behavior) | "hybrid" (BM25 + dense via RRF)
+    retrieval_mode: str = "dense"
+    bm25_weight: float = 1.0
+    rrf_k: int = 60
+
     # pruning baselines
     pruning_keep_ratio: float = 0.30
     pruning_percentile_ratio: float = 0.70
