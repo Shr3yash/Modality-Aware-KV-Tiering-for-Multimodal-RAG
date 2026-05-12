@@ -7,6 +7,17 @@ from PIL import Image
 from sentence_transformers import SentenceTransformer
 from transformers import CLIPModel, CLIPProcessor
 
+
+def _clip_features_to_tensor(raw: object) -> torch.Tensor:
+    """Transformers 5.x returns BaseModelOutputWithPooling from get_*_features; older stacks returned a tensor."""
+    if isinstance(raw, torch.Tensor):
+        return raw
+    po = getattr(raw, "pooler_output", None)
+    if po is not None:
+        return po
+    raise TypeError(f"Unexpected CLIP feature output type: {type(raw)}")
+
+
 class QuoteRetriever:
     def __init__(
         self,
@@ -37,7 +48,8 @@ class QuoteRetriever:
                 padding=True,
                 truncation=True,
             ).to(self.device)
-            feats = self.clip_model.get_text_features(**inputs)
+            raw_feats = self.clip_model.get_text_features(**inputs)
+            feats = _clip_features_to_tensor(raw_feats)
             feats = feats / feats.norm(dim=-1, keepdim=True)
         return feats.cpu().numpy().astype("float32")
 
@@ -65,7 +77,8 @@ class QuoteRetriever:
                 return_tensors="pt",
                 padding=True,
             ).to(self.device)
-            feats = self.clip_model.get_image_features(**inputs)
+            raw_feats = self.clip_model.get_image_features(**inputs)
+            feats = _clip_features_to_tensor(raw_feats)
             feats = feats / feats.norm(dim=-1, keepdim=True)
 
         return feats.cpu().numpy().astype("float32"), valid_idx
@@ -76,6 +89,23 @@ class QuoteRetriever:
         sims = c_embs @ q_emb
         order = np.argsort(-sims)
         return order[:k].tolist()
+
+    def _normalize_vector(self, vec: np.ndarray) -> np.ndarray:
+        norm = np.linalg.norm(vec)
+        if norm == 0.0:
+            return vec
+        return vec / norm
+
+    def _image_conditioned_clip_tag(
+        self,
+        query_emb: np.ndarray,
+        img_emb: np.ndarray,
+    ) -> List[float]:
+        image_context = self._normalize_vector(img_emb)
+        tag = self._normalize_vector(query_emb * image_context)
+        if np.linalg.norm(tag) == 0.0:
+            tag = image_context
+        return tag.astype(float).tolist()
 
     def retrieve(self, example: Dict, text_top_k: int = 4, image_top_k: int = 2) -> Dict:
         query = example["question"]
@@ -94,14 +124,19 @@ class QuoteRetriever:
 
         # Text-to-image retrieval with CLIP (image paths)
         selected_images = []
+        tags = []
+        query_img_emb = self._encode_clip_text([query])[0]
         if img_quotes:
             image_paths = [q.get("local_img_path", "") for q in img_quotes]
             img_embs, valid_idx = self._encode_clip_images(image_paths)
 
             if len(valid_idx) > 0 and len(img_embs) > 0:
-                query_img_emb = self._encode_clip_text([query])[0]
                 local_topk = self._topk(query_img_emb, img_embs, min(image_top_k, len(valid_idx)))
-                selected_images = [img_quotes[valid_idx[i]] for i in local_topk]
+                selected_images = []
+                for i in local_topk:
+                    item = dict(img_quotes[valid_idx[i]])
+                    item["tag"] = self._image_conditioned_clip_tag(query_img_emb, img_embs[i])
+                    selected_images.append(item)
 
         return {
             "selected_text_quotes": selected_texts,

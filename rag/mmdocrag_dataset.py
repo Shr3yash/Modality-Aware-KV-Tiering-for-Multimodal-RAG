@@ -29,12 +29,22 @@ def normalize_example(ex: Dict, images_root: Path) -> Dict:
         "text_quotes": text_quotes,
         "img_quotes": img_quotes,
         "gold_quotes": ex.get("gold_quotes", []),
-        "answer_short": ex.get("answer_short", ""),
+        "answer": ex.get("answer_short", ""),
     }
 
-def load_examples(ann_file: Path, images_root: Path, limit: int | None = None) -> List[Dict]:
+def load_examples(
+    ann_file: Path,
+    images_root: Path,
+    limit: int | None = None,
+    slice_start: int = 0,
+    slice_stop: int | None = None,
+) -> List[Dict]:
     out = []
-    for ex in load_jsonl(ann_file):
+    for i, ex in enumerate(load_jsonl(ann_file)):
+        if i < slice_start:
+            continue
+        if slice_stop is not None and i >= slice_stop:
+            break
         out.append(normalize_example(ex, images_root))
         if limit is not None and len(out) >= limit:
             break

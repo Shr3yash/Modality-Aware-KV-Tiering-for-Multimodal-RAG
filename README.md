@@ -1,7 +1,6 @@
 # Modality-Policy-for-Multimodal-RAG
 
-
-GPU requirement: 80GB at least
+GPU requirement: H200 GPU, 140GB
 
 pipeline:
 → datasetName_dataset.py: organize the data from dataset (file) to map or list for code
@@ -12,29 +11,35 @@ pipeline:
 → eval_baseline.py: take the output from query pipeline and evaluate
 → output in output folder
 
-
-Before starting, install necessary packages `lmcache` and `vllm`.
-
+Before starting, install necessary package `vllm`. (requirements.txt under construction)
 
 Load dataset:
+
 ```
 ./scripts/download_mmdocrag.sh
 ```
 
 Start the vllm server
+
 ```
-vllm serve Qwen/Qwen3-Omni-30B-A3B-Instruct \
+PYTHONPATH=$PYTHONPATH:. \
+python -m vllm.entrypoints.openai.api_server \
+  --model Qwen/Qwen3-Omni-30B-A3B-Instruct \
   --max-model-len 16384 \
-  --gpu_memory_utilization 0.8 \ # add this line to reduce GPU footprint
-  --kv-transfer-config '{"kv_connector":"LMCacheConnectorV1", "kv_role":"kv_both"}'
+  --gpu_memory_utilization=0.5 \
+  --host 0.0.0.0 \
+  --port 8000
+
 ```
 
 In another terminal:
+
 ```
-PYTHONPATH=$PYTHONPATH:. python scripts/run_mmdocrag_baseline.py
+# JSONL lines 10–19 (10 rows), no extra cap
+PYTHONPATH=$PYTHONPATH:. python scripts/run_mmdocrag_baseline.py --eval-slice-start 0 --eval-slice-stop 50 --max-examples 0
+
+# From line 100, at most 15 examples
+PYTHONPATH=$PYTHONPATH:. python scripts/run_mmdocrag_baseline.py --eval-slice-start 100 --max-examples 15
+
 ```
 
-Reset used disk:
-```
-rm -rf ~/lmcache_storage
-```

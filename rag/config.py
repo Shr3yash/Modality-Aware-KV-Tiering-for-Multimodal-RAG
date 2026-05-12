@@ -4,7 +4,7 @@ from pathlib import Path
 @dataclass
 class RAGConfig:
     data_root: Path = Path("data/mmdocrag")
-    ann_file: Path = Path("data/mmdocrag/dev_15.jsonl")
+    ann_file: Path = Path("data/mmdocrag/evaluation_15.jsonl")
     images_root: Path = Path("data/mmdocrag/images")
     output_dir: Path = Path("data/mmdocrag/outputs")
 
@@ -16,13 +16,18 @@ class RAGConfig:
     retrieval_device: str = "cuda"
 
     # pruning baselines
-    pruning_mode: str = "visual_patch_pruning"  # {"no_pruning", "uniform_pruning", "visual_only_pruning", "visual_patch_pruning", "model_internal_visual_pruning"}
-    pruning_keep_ratio: float = 0.5
+    pruning_keep_ratio: float = 0.30
+    pruning_percentile_ratio: float = 0.70
+    # {"no_pruning", "uniform_pruning", "visual_only_pruning", "visual_patch_pruning", "catp_pruning"}
+    pruning_mode: str = "catp_pruning"
     patch_grid_rows: int = 4
     patch_grid_cols: int = 4
     min_visual_tokens: int = 4
     montage_tile_size: int = 224
     pruned_image_dir: Path = Path("data/mmdocrag/outputs/pruned_images")
+    image_prune_cache_enabled: bool = True
+    image_prune_cache_similarity_threshold: float = 0.85
+    image_prune_cache_path: Path = Path("data/mmdocrag/outputs/image_prune_cache.json")
 
     # generation
     vlm_api_base: str = "http://127.0.0.1:8000/v1"
@@ -33,5 +38,23 @@ class RAGConfig:
     judge_api_base: str = "http://127.0.0.1:8000/v1"
     judge_model_name: str = "Qwen/Qwen3-Omni-30B-A3B-Instruct"
 
-    # eval
-    max_examples: int = 50   # start small for baseline
+    # eval (None = use entire split / JSONL / official VQA file)
+    max_examples: int | None = 50
+    # MMDocRAG JSONL line indices (0-based); slice_stop is exclusive (Python slice).
+    # Rows must fall in [slice_start, slice_stop) before max_examples caps length.
+    eval_slice_start: int = 0
+    eval_slice_stop: int | None = None
+
+    # benchmark: "mmdocrag" (JSONL) or "vqav2" (Hugging Face)
+    benchmark: str = "mmdocrag"
+    # Full VQAv2 val (~214k Q): set all three to local paths from visualqa.org + COCO val2014 images.
+    vqa_questions_json: Path | None = None
+    vqa_annotations_json: Path | None = None
+    vqa_coco_images_dir: Path | None = None
+    vqa_hf_dataset: str = "HuggingFaceM4/VQAv2"
+    vqa_hf_split: str = "validation"
+    vqa_hf_revision: str | None = None
+    vqa_hf_auto_fallback: bool = True
+    vqa_hf_fallback_dataset: str = "Multimodal-Fatima/VQAv2_sample_validation"
+    vqa_hf_fallback_split: str = "validation"
+    vqa_image_cache_dir: Path = Path("data/vqav2/image_cache")

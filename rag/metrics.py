@@ -6,9 +6,8 @@ from openai import OpenAI
 
 JUDGE_PROMPT = """
     You are evaluating a multimodal RAG system output.
-    Judge two things:
-    1. Correctness: whether the predicted answer is semantically correct with respect to the gold answer.
-    2. Faithfulness: whether the predicted answer is supported by the provided evidence.
+    Judge one things:
+    Correctness: whether the predicted answer is semantically correct with respect to the gold answer.
 
     Rules:
     - Focus on semantic equivalence, not exact wording.
@@ -16,7 +15,6 @@ JUDGE_PROMPT = """
     - Ignore extra explanation if the core answer is correct.
     - Treat numerically equivalent answers as correct only when they mean the same thing.
     - Be careful to distinguish percent from percentage point, and absolute from relative change.
-    - If the prediction includes the correct answer plus unsupported extra claims, correctness may still be high but faithfulness should be lower.
 
     Correctness score rubric:
     5 = fully correct
@@ -26,22 +24,11 @@ JUDGE_PROMPT = """
     1 = incorrect but related
     0 = completely incorrect
 
-    Faithfulness score rubric:
-    5 = fully supported by evidence
-    4 = mostly supported with minor unsupported detail
-    3 = partially supported
-    2 = weakly supported
-    1 = mostly unsupported
-    0 = contradicted or unsupported
-
     Return ONLY valid JSON with this schema:
     {{
     "correct": 0 or 1,
     "score": integer 0-5,
-    "reason": "short explanation",
-    "faithful": 0 or 1,
-    "faithfulness_score": integer 0-5,
-    "faithfulness_reason": "short explanation"
+    "reason": "short explanation"
     }}
 
     Question:
@@ -52,9 +39,6 @@ JUDGE_PROMPT = """
 
     Predicted answer:
     {pred_answer}
-
-    Evidence:
-    {evidence}
 """
 
 def normalize_text(s: str) -> str:
@@ -111,13 +95,11 @@ def llm_judge(
     question: str,
     gold_answer: str,
     pred_answer: str,
-    evidence: str,
 ) -> Dict:
     prompt = JUDGE_PROMPT.format(
         question=question,
         gold_answer=gold_answer,
         pred_answer=strip_citations(pred_answer),
-        evidence=evidence if evidence.strip() else "No evidence provided.",
     )
 
     resp = client.chat.completions.create(
@@ -134,18 +116,12 @@ def llm_judge(
             "correct": 0,
             "score": 0,
             "reason": f"Judge returned invalid JSON: {text[:200]}",
-            "faithful": 0,
-            "faithfulness_score": 0,
-            "faithfulness_reason": "Judge returned invalid JSON",
         }
 
     return {
         "correct": int(parsed.get("correct", 0)),
         "score": int(parsed.get("score", 0)),
         "reason": str(parsed.get("reason", "")),
-        "faithful": int(parsed.get("faithful", 0)),
-        "faithfulness_score": int(parsed.get("faithfulness_score", 0)),
-        "faithfulness_reason": str(parsed.get("faithfulness_reason", "")),
     }
 
 def lexical_metrics(pred: str, gold: str) -> Dict[str, float]:
@@ -183,10 +159,9 @@ def aggregate_summary(rows: List[Dict]) -> Dict:
         "em",
         "f1",
         "retrieval_recall",
+        "vqa_acc",
         "judge_correct",
         "judge_score",
-        "judge_faithful",
-        "judge_faithfulness_score",
     ]:
         value = avg_metric(metric_name)
         if value is not None:
