@@ -21,6 +21,15 @@ class RAGConfig:
     bm25_weight: float = 1.0
     rrf_k: int = 60
 
+    # query rewriting / expansion (multi-query retrieval)
+    # mode: "none" (passthrough) | "rule_based" | "llm"
+    query_rewrite_mode: str = "none"
+    query_rewrite_max_variants: int = 3
+    query_rewrite_cache_path: Path = Path("data/mmdocrag/outputs/query_rewrite_cache.json")
+    # LLM rewriter reuses the VLM endpoint by default; override for a separate model.
+    query_rewrite_api_base: str | None = None
+    query_rewrite_model_name: str | None = None
+
     # pruning baselines
     pruning_keep_ratio: float = 0.30
     pruning_percentile_ratio: float = 0.70
