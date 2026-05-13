@@ -165,49 +165,79 @@ class QuoteRetriever:
             tag = image_context
         return tag.astype(float).tolist()
 
-    def retrieve(self, example: Dict, text_top_k: int = 4, image_top_k: int = 2) -> Dict:
+    def retrieve(
+        self,
+        example: Dict,
+        text_top_k: int = 4,
+        image_top_k: int = 2,
+        variants: Optional[List[str]] = None,
+    ) -> Dict:
         query = example["question"]
+        # variants[0] is the principal query; preserves single-query semantics
+        # when no rewriter is configured.
+        if not variants:
+            variants = [query]
 
         text_quotes = example["text_quotes"]
         img_quotes = example["img_quotes"]
 
-        # 1) text-to-text retrieval
+        # 1) text-to-text retrieval (multi-variant + optional BM25, fused via RRF)
         selected_texts = []
         if text_quotes:
             text_corpus = [q.get("text", "") for q in text_quotes]
             text_embs = self._encode_text_quotes(text_corpus)
-            query_text_emb = self._encode_text_quotes([query])[0]
             k_text = min(text_top_k, len(text_quotes))
-            dense_full = self._topk(query_text_emb, text_embs, len(text_quotes))
+
+            rank_lists: List[List[int]] = []
+            weights: List[float] = []
+            for v in variants:
+                v_emb = self._encode_text_quotes([v])[0]
+                rank_lists.append(self._topk(v_emb, text_embs, len(text_quotes)))
+                weights.append(1.0)
             if self.retrieval_mode == "hybrid":
-                bm25_full = self._bm25_rank(query, text_corpus)
-                if bm25_full:
-                    text_idx = _rrf_fuse(
-                        [dense_full, bm25_full],
-                        [1.0, self.bm25_weight],
-                        self.rrf_k,
-                        k_text,
-                    )
-                else:
-                    text_idx = dense_full[:k_text]
+                for v in variants:
+                    bm25_full = self._bm25_rank(v, text_corpus)
+                    if bm25_full:
+                        rank_lists.append(bm25_full)
+                        weights.append(self.bm25_weight)
+
+            if len(rank_lists) == 1:
+                # Identical to legacy dense top-k: avoid RRF round-off for the default path.
+                text_idx = rank_lists[0][:k_text]
             else:
-                text_idx = dense_full[:k_text]
+                text_idx = _rrf_fuse(rank_lists, weights, self.rrf_k, k_text)
             selected_texts = [text_quotes[i] for i in text_idx]
 
-        # Text-to-image retrieval with CLIP (image paths)
+        # 2) text-to-image retrieval with CLIP (multi-variant fused via RRF)
         selected_images = []
-        tags = []
-        query_img_emb = self._encode_clip_text([query])[0]
         if img_quotes:
+            # Principal query embedding drives the per-image conditioning tag so the
+            # downstream image-prune cache keys stay stable across rewriter modes.
+            clip_query_embs = self._encode_clip_text(variants)
+            principal_clip_emb = clip_query_embs[0]
             image_paths = [q.get("local_img_path", "") for q in img_quotes]
             img_embs, valid_idx = self._encode_clip_images(image_paths)
 
             if len(valid_idx) > 0 and len(img_embs) > 0:
-                local_topk = self._topk(query_img_emb, img_embs, min(image_top_k, len(valid_idx)))
-                selected_images = []
+                k_img = min(image_top_k, len(valid_idx))
+                if len(clip_query_embs) == 1:
+                    local_topk = self._topk(principal_clip_emb, img_embs, k_img)
+                else:
+                    img_rank_lists = [
+                        self._topk(q_emb, img_embs, len(img_embs))
+                        for q_emb in clip_query_embs
+                    ]
+                    local_topk = _rrf_fuse(
+                        img_rank_lists,
+                        [1.0] * len(img_rank_lists),
+                        self.rrf_k,
+                        k_img,
+                    )
                 for i in local_topk:
                     item = dict(img_quotes[valid_idx[i]])
-                    item["tag"] = self._image_conditioned_clip_tag(query_img_emb, img_embs[i])
+                    item["tag"] = self._image_conditioned_clip_tag(
+                        principal_clip_emb, img_embs[i]
+                    )
                     selected_images.append(item)
 
         return {

@@ -12,6 +12,7 @@ from openai import OpenAI
 from rag.config import RAGConfig
 from rag.prompt_builder import build_prompt
 from rag.pruner import RetrievalPruner
+from rag.query_rewriter import build_rewriter
 from rag.retriever import QuoteRetriever
 
 def iter_jpgs(path: str | Path) -> list[Path]:
@@ -66,6 +67,7 @@ class RAGPipeline:
             bm25_weight=getattr(cfg, "bm25_weight", 1.0),
             rrf_k=getattr(cfg, "rrf_k", 60),
         )
+        self.query_rewriter = build_rewriter(cfg)
         self.pruner = RetrievalPruner(
             mode=cfg.pruning_mode,
             keep_ratio=cfg.pruning_keep_ratio,
@@ -274,10 +276,12 @@ class RAGPipeline:
 
     def run_one(self, example: Dict) -> Dict:
         t0 = time.perf_counter()
+        query_variants = self.query_rewriter.rewrite(example["question"])
         retrieval = self.retriever.retrieve(
             example,
             text_top_k=self.cfg.text_top_k,
             image_top_k=self.cfg.image_top_k,
+            variants=query_variants,
         )
         retrieval = self._with_tag_hash(retrieval)
         cached_img_quotes, cache_stats = self._split_cached_images(retrieval)
@@ -385,6 +389,7 @@ class RAGPipeline:
         return {
             "q_id": example["q_id"], # query id
             "question": example["question"],
+            "query_variants": query_variants,
             "gold_answer": example["answer"],
             "pred_answer": pred,
             "gold_quotes": example["gold_quotes"],
