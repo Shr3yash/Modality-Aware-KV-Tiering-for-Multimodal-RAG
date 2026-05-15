@@ -11,7 +11,7 @@ pipeline:
 → eval_baseline.py: take the output from query pipeline and evaluate
 → output in output folder
 
-Before starting, install necessary package `vllm`. (requirements.txt under construction)
+Before starting, install necessary package `vllm`.
 
 Load dataset:
 
