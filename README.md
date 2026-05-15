@@ -2,14 +2,14 @@
 
 GPU requirement: H200 GPU, 140GB
 
-pipeline:
-→ datasetName_dataset.py: organize the data from dataset (file) to map or list for code
-→ retriever.py: compare the query with corpus and retrieve the top-k
-→ prune.py: simple pruning applied
-→ prompt_builder.py: build a prompt with instructions.
-→ query_pipeline.py: enter the rendered prompt into the MLLM and generate output.
-→ eval_baseline.py: take the output from query pipeline and evaluate
-→ output in output folder
+**pipeline:**
+- datasetName_dataset.py: organize the data from dataset (file) to map or list for code
+- retriever.py: compare the query with corpus and retrieve the top-k
+- prune.py: simple pruning applied
+- prompt_builder.py: build a prompt with instructions.
+- query_pipeline.py: enter the rendered prompt into the MLLM and generate output.
+- eval_baseline.py: take the output from query pipeline and evaluate
+- output in output folder
 
 Before starting, install conda. Then
 ```
