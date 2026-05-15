@@ -11,7 +11,15 @@ pipeline:
 → eval_baseline.py: take the output from query pipeline and evaluate
 → output in output folder
 
-Before starting, install necessary package `vllm`.
+Before starting, install conda. Then
+```
+conda env create -f environment.yml
+```
+
+Activate the environment:
+```
+conda activate mrag
+```
 
 Load dataset:
 
