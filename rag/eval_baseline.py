@@ -7,8 +7,6 @@ from rag.config import RAGConfig
 from rag.mmdocrag_dataset import load_examples
 from rag.metrics import aggregate_summary, lexical_metrics, llm_judge, retrieval_recall
 from rag.query_pipeline import RAGPipeline
-from rag.vqa_metrics import vqa_accuracy
-from rag.vqav2_dataset import load_vqav2_examples
 
 def _predictions_path(cfg: RAGConfig) -> Path:
     return cfg.output_dir / "baseline_predictions.json"
