@@ -120,23 +120,16 @@ class RetrievalPruner:
 
     Modes:
       - no_pruning
-      - uniform_pruning
-      - visual_only_pruning
       - visual_patch_pruning
-      - catp_pruning
-    Notes:
-      * visual_patch_pruning is server-compatible: it rewrites each selected image into
-        a smaller montage of kept patches so the served model sees fewer visual patches.
-      * catp_pruning is also server-compatible: it rewrites each selected image into
-        the Qwen2-VL CATP cropped image selected from query-to-image attention.
+      - safecrop_pruning
+      - cluster_pruning
     """
 
     SUPPORTED_MODES = {
         "no_pruning",
-        "uniform_pruning",
-        "visual_only_pruning",
         "visual_patch_pruning",
-        "catp_pruning",
+        "safecrop_pruning",
+        "cluster_pruning",
     }
 
     def __init__(
@@ -187,7 +180,7 @@ class RetrievalPruner:
             self.clip_processor = CLIPProcessor.from_pretrained(image_model_name)
             self.clip_model = CLIPModel.from_pretrained(image_model_name).to(self.device)
             self.clip_model.eval()
-        elif mode == "catp_pruning":
+        elif mode == "safecrop_pruning" or mode == "cluster_pruning":
             from rag.qwen2vl_catp_pruner_v2 import Qwen2VLCATPBoundingBoxCropper
 
             self.catp_cropper = Qwen2VLCATPBoundingBoxCropper(device=str(self.device))
@@ -217,7 +210,7 @@ class RetrievalPruner:
                 visual_before += before_i
                 visual_after += after_i
             pruned_images = processed
-        elif self.mode == "catp_pruning":
+        elif self.mode == "safecrop_pruning" or self.mode == "cluster_pruning":
             processed = []
             visual_before = 0
             visual_after = 0
@@ -319,6 +312,7 @@ class RetrievalPruner:
             percentile_ratio = self.percentile_ratio,
             image_cache_id = q.get("image_cache_id"),
             tag_hash = q.get("tag_hash"),
+            isCluster = self.mode == "cluster_pruning",
         )
 
         before = int(meta.get("tokens_before", before))

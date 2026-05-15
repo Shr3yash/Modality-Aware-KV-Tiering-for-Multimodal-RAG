@@ -51,3 +51,13 @@ PYTHONPATH=$PYTHONPATH:. python scripts/run_mmdocrag_baseline.py --eval-slice-st
 
 ```
 
+In `rag/config.py`, find and change the following config to different pruning mode or keep_ratio:
+```
+# {"no_pruning", "visual_patch_pruning", "safecrop_pruning", "cluster_pruning"}
+pruning_mode: str = "safecrop_pruning"
+
+...
+
+# pruning baselines
+pruning_keep_ratio: float = 0.30 # feel free to change the keep_ratio
+```
