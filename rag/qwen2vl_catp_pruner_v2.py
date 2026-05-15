@@ -477,6 +477,7 @@ class Qwen2VLCATPBoundingBoxCropper:
         image_height: int,
         keep_ratio: float = 0.3,
         percentile_ratio: float = 0.7,
+        isCluster: bool = True,
         similarity_threshold: float = 0.98,
         max_gap: int = 1,
     ):
